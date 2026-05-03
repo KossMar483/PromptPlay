@@ -474,30 +474,7 @@
   }
   #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-  /* Config warning */
-  #config-warning {
-    background: #fff3cd;
-    border: 1.5px solid #ffc107;
-    border-radius: var(--radius);
-    padding: 1rem 1.25rem;
-    margin-bottom: 1.5rem;
-    font-size: 0.9rem;
-    line-height: 1.5;
-    color: #5c4500;
-    display: none;
-  }
-  #config-warning a { color: var(--accent); }
 
-  .config-form { display: none; }
-  .config-form.show { display: block; }
-  .config-form label {
-    font-size: 0.85rem;
-    color: var(--ink2);
-    display: block;
-    margin-bottom: 0.3rem;
-    font-weight: 500;
-  }
-  .config-form .form-group { margin-bottom: 1rem; }
 
   @media (max-width: 480px) {
     .container { padding: 1.5rem 1rem 3rem; }
@@ -517,29 +494,7 @@
     <p class="tagline">El juego de prompts para grupos</p>
   </header>
 
-  <!-- CONFIG WARNING -->
-  <div id="config-warning">
-    ⚠️ <strong>Firebase no está configurado.</strong> Para que el juego multijugador funcione necesitas conectar tu propia base de datos Firebase Realtime Database. 
-    <a href="#" onclick="toggleConfig()">Configurar ahora →</a>
-    <div class="config-form" id="config-form" style="margin-top:1rem;">
-      <div class="form-group">
-        <label>API Key</label>
-        <input type="text" id="cfg-apikey" placeholder="AIza...">
-      </div>
-      <div class="form-group">
-        <label>Database URL</label>
-        <input type="text" id="cfg-dburl" placeholder="https://tu-proyecto.firebaseio.com">
-      </div>
-      <div class="form-group">
-        <label>Project ID</label>
-        <input type="text" id="cfg-projectid" placeholder="tu-proyecto-id">
-      </div>
-      <button class="btn btn-primary" onclick="saveConfig()">Guardar y recargar</button>
-      <small style="margin-top:0.5rem;">Crea un proyecto en <a href="https://console.firebase.google.com" target="_blank" style="color:var(--accent)">console.firebase.google.com</a>. Activa Realtime Database y pon las reglas en modo test.</small>
-    </div>
-  </div>
-
-  <!-- ===== VIEW: HOME ===== -->
+<!-- ===== VIEW: HOME ===== -->
   <div id="view-home" class="view active">
 
     <div class="card">
@@ -721,12 +676,11 @@
 
 <script>
 // ─── FIREBASE CONFIG ──────────────────────────────────────────────────────────
-// Se puede configurar guardando en localStorage
-const DEFAULT_CONFIG = {
-  apiKey: localStorage.getItem('pp_apiKey') || '',
-  authDomain: '',
-  databaseURL: localStorage.getItem('pp_dbUrl') || '',
-  projectId: localStorage.getItem('pp_projectId') || '',
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyBOqdepW9wItBMlGFWfie_3JSGpUHdNcC4",
+  authDomain: "promptplay-836d3.firebaseapp.com",
+  databaseURL: "https://promptplay-836d3-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "promptplay-836d3",
 };
 
 let db = null;
@@ -739,28 +693,11 @@ function initFirebase(config) {
     }
     db = firebase.database();
     configOk = true;
-    document.getElementById('config-warning').style.display = 'none';
     return true;
   } catch(e) {
     console.error('Firebase init error', e);
     return false;
   }
-}
-
-function toggleConfig() {
-  const f = document.getElementById('config-form');
-  f.classList.toggle('show');
-}
-
-function saveConfig() {
-  const apiKey = document.getElementById('cfg-apikey').value.trim();
-  const dbUrl = document.getElementById('cfg-dburl').value.trim();
-  const projectId = document.getElementById('cfg-projectid').value.trim();
-  if (!apiKey || !dbUrl || !projectId) { showToast('Completa todos los campos'); return; }
-  localStorage.setItem('pp_apiKey', apiKey);
-  localStorage.setItem('pp_dbUrl', dbUrl);
-  localStorage.setItem('pp_projectId', projectId);
-  location.reload();
 }
 
 // ─── STATE ────────────────────────────────────────────────────────────────────
@@ -1203,26 +1140,9 @@ function goHome() {
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
-  const apiKey = localStorage.getItem('pp_apiKey');
-  const dbUrl = localStorage.getItem('pp_dbUrl');
-  const projectId = localStorage.getItem('pp_projectId');
-
-  if (apiKey && dbUrl && projectId) {
-    const ok = initFirebase({ apiKey, databaseURL: dbUrl, projectId, authDomain: projectId + '.firebaseapp.com' });
-    if (!ok) showWarning();
-  } else {
-    showWarning();
-  }
-
+  initFirebase(FIREBASE_CONFIG);
   checkURLJoin();
 });
-
-function showWarning() {
-  document.getElementById('config-warning').style.display = 'block';
-  document.getElementById('cfg-apikey').value = localStorage.getItem('pp_apiKey') || '';
-  document.getElementById('cfg-dburl').value = localStorage.getItem('pp_dbUrl') || '';
-  document.getElementById('cfg-projectid').value = localStorage.getItem('pp_projectId') || '';
-}
 </script>
 </body>
 </html>
