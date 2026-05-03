@@ -572,15 +572,7 @@
     </div>
 
     <h3>Escribe tu prompt</h3>
-    <p class="muted" id="write-subtitle">Tu prompt irá a una persona al azar</p>
-
-    <div class="prompt-target">
-      <span class="arrow">→</span>
-      <div>
-        <div style="font-size:0.75rem;color:var(--ink3);letter-spacing:0.05em;text-transform:uppercase;margin-bottom:2px;">Tu prompt irá a</div>
-        <div class="target-name" id="prompt-target-name">...</div>
-      </div>
-    </div>
+    <p class="muted">Tu prompt irá a alguien al azar... ¡nadie sabe a quién!</p>
 
     <div class="card">
       <textarea id="prompt-text" placeholder="Escribe aquí tu prompt... (ej: 'Descríbete como si fueras un personaje de videojuego')" maxlength="500"></textarea>
@@ -611,57 +603,16 @@
 
   </div>
 
-  <!-- ===== VIEW: ANSWER ===== -->
-  <div id="view-answer" class="view">
-
-    <div class="phase-bar">
-      <div class="phase-dot done"></div>
-      <div class="phase-dot done"></div>
-      <div class="phase-dot active"></div>
-    </div>
-
-    <h3>Responde al prompt</h3>
-    <p class="muted">Alguien tiene ganas de saber algo de ti</p>
-
-    <div class="card" style="border-left: 4px solid var(--accent);">
-      <div style="font-size:0.8rem;color:var(--ink3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.5rem;">El prompt que recibiste</div>
-      <p style="font-size:1.05rem;line-height:1.6;font-style:italic;color:var(--ink);" id="received-prompt">&ldquo;...&rdquo;</p>
-    </div>
-
-    <div class="card">
-      <textarea id="answer-text" placeholder="Tu respuesta..." maxlength="800"></textarea>
-      <small style="text-align:right; margin-top:0.5rem;" id="char-count-answer">0 / 800</small>
-    </div>
-
-    <button class="btn btn-green" onclick="submitAnswer()">Enviar respuesta ✓</button>
-  </div>
-
-  <!-- ===== VIEW: WAITING FOR ANSWERS ===== -->
-  <div id="view-waiting-answers" class="view">
-    <div class="phase-bar">
-      <div class="phase-dot done"></div>
-      <div class="phase-dot done"></div>
-      <div class="phase-dot active"></div>
-    </div>
-    <h3>Respuesta enviada ✓</h3>
-    <p class="muted">Esperando a que todos respondan...</p>
-    <div class="card">
-      <div class="card-title">Estado de respuestas</div>
-      <div id="waiting-answers-players"></div>
-    </div>
-  </div>
-
   <!-- ===== VIEW: RESULTS ===== -->
   <div id="view-results" class="view">
 
     <div class="phase-bar">
       <div class="phase-dot done"></div>
       <div class="phase-dot done"></div>
-      <div class="phase-dot done"></div>
     </div>
 
-    <h3>Resultados 🎉</h3>
-    <p class="muted">¡Así respondió todo el mundo!</p>
+    <h3>Prompts 🎉</h3>
+    <p class="muted">¡A ver quién recibió qué!</p>
 
     <div id="results-container"></div>
 
@@ -936,26 +887,17 @@ async function startGame() {
 
 // ─── WRITE PHASE ─────────────────────────────────────────────────────────────
 async function enterWritePhase() {
-  // Obtener mi asignación
   const snap = await roomRef('assignments/' + state.playerId).get();
-  const targetId = snap.val();
-  state.assignedTarget = targetId;
+  state.assignedTarget = snap.val();
 
-  const tSnap = await roomRef('players/' + targetId + '/name').get();
-  const targetName = tSnap.val();
-
-  document.getElementById('prompt-target-name').textContent = targetName;
   showView('write');
 
-  // Character counter
   const ta = document.getElementById('prompt-text');
   const cc = document.getElementById('char-count');
   ta.addEventListener('input', () => { cc.textContent = ta.value.length + ' / 500'; });
 
-  // Escuchar phase changes
   onRoom('phase', snap => {
     const phase = snap.val();
-    if (phase === 'answering') { offAll(); enterAnswerPhase(); }
     if (phase === 'results') { offAll(); enterResults(); }
   });
 }
@@ -982,8 +924,7 @@ async function submitPrompt() {
     const total = Object.keys(players).length;
     const submitted = Object.keys(prompts).length;
     if (submitted >= total && state.isHost) {
-      // Todos enviaron, pasar a responder
-      await roomRef('phase').set('answering');
+      await roomRef('phase').set('results');
     }
   });
 }
@@ -1009,103 +950,32 @@ async function renderWaitingPlayers() {
   });
 }
 
-// ─── ANSWER PHASE ────────────────────────────────────────────────────────────
-async function enterAnswerPhase() {
-  // Encontrar el prompt que me llegó a mí
-  const snap = await roomRef('prompts').get();
-  const prompts = snap.val() || {};
-
-  let myPrompt = null;
-  for (const [fromId, p] of Object.entries(prompts)) {
-    if (p.to === state.playerId) {
-      myPrompt = p;
-      state.receivedFrom = fromId;
-      break;
-    }
-  }
-
-  if (!myPrompt) {
-    showToast('Error: no se encontró tu prompt');
-    return;
-  }
-
-  state.receivedPromptText = myPrompt.text;
-  document.getElementById('received-prompt').textContent = `"${myPrompt.text}"`;
-
-  showView('answer');
-
-  const ta = document.getElementById('answer-text');
-  const cc = document.getElementById('char-count-answer');
-  ta.addEventListener('input', () => { cc.textContent = ta.value.length + ' / 800'; });
-
-  onRoom('phase', snap => {
-    const phase = snap.val();
-    if (phase === 'results') { offAll(); enterResults(); }
-  });
-}
-
-async function submitAnswer() {
-  const text = document.getElementById('answer-text').value.trim();
-  if (!text) { showToast('Escribe tu respuesta primero'); return; }
-
-  await roomRef('answers/' + state.playerId).set({
-    playerId: state.playerId,
-    promptFrom: state.receivedFrom,
-    text,
-  });
-
-  showView('waiting-answers');
-
-  onRoom('answers', async snap => {
-    const answers = snap.val() || {};
-    const pSnap = await roomRef('players').get();
-    const players = pSnap.val() || {};
-    renderWaiting(players, answers, 'waiting-answers-players');
-
-    const total = Object.keys(players).length;
-    const answered = Object.keys(answers).length;
-    if (answered >= total && state.isHost) {
-      await roomRef('phase').set('results');
-    }
-  });
-}
-
 // ─── RESULTS ─────────────────────────────────────────────────────────────────
 async function enterResults() {
   showView('results');
 
-  const [pSnap, prSnap, aSnap] = await Promise.all([
+  const [pSnap, prSnap] = await Promise.all([
     roomRef('players').get(),
     roomRef('prompts').get(),
-    roomRef('answers').get(),
   ]);
 
   const players = pSnap.val() || {};
   const prompts = prSnap.val() || {};
-  const answers = aSnap.val() || {};
 
   const container = document.getElementById('results-container');
   container.innerHTML = '';
 
   Object.entries(prompts).forEach(([fromId, prompt]) => {
     const fromPlayer = players[fromId];
-    const toPlayer = players[prompt.to];
-    const answer = answers[prompt.to];
 
     const card = document.createElement('div');
     card.className = 'result-card';
     card.innerHTML = `
       <div class="result-header">
-        <div><strong>${fromPlayer?.name || '?'}</strong> → <strong>${toPlayer?.name || '?'}</strong></div>
+        <div>De <strong>${fromPlayer?.name || '?'}</strong></div>
         <div style="color:#aaa;font-size:0.8rem;">prompt</div>
       </div>
       <div class="result-prompt">${escHtml(prompt.text)}</div>
-      ${answer ? `
-        <div class="result-answer">
-          <strong style="font-size:0.8rem;color:var(--ink3);letter-spacing:0.05em;text-transform:uppercase;">Respuesta de ${toPlayer?.name || '?'}</strong><br>
-          ${escHtml(answer.text)}
-        </div>
-      ` : '<div class="result-answer" style="color:var(--ink3);font-style:italic;">Sin respuesta</div>'}
     `;
     container.appendChild(card);
   });
@@ -1122,19 +992,16 @@ async function playAgain() {
       phase: 'lobby',
       assignments: null,
       prompts: null,
-      answers: null,
     });
   }
   state.assignedTarget = null;
-  state.receivedFrom = null;
-  state.receivedPromptText = null;
   offAll();
   enterLobby();
 }
 
 function goHome() {
   offAll();
-  state = { playerId: null, playerName: null, roomCode: null, isHost: false, assignedTarget: null, receivedFrom: null, receivedPromptText: null };
+  state = { playerId: null, playerName: null, roomCode: null, isHost: false, assignedTarget: null };
   showView('home');
 }
 
