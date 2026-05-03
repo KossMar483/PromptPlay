@@ -1,0 +1,1228 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PromptPlay — Juego de Prompts</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --ink: #0e0e0e;
+    --ink2: #3a3a3a;
+    --ink3: #7a7a7a;
+    --paper: #f5f0e8;
+    --paper2: #ede8dc;
+    --paper3: #e0d9cc;
+    --accent: #d4380d;
+    --accent2: #ff6b35;
+    --green: #2d6a4f;
+    --green2: #52b788;
+    --border: #c8c0b0;
+    --radius: 12px;
+    --radius-lg: 20px;
+  }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* NOISE TEXTURE */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.6;
+  }
+
+  .container {
+    max-width: 700px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* HEADER */
+  .header {
+    text-align: center;
+    margin-bottom: 3rem;
+    padding-top: 1rem;
+  }
+  .logo {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: clamp(2.5rem, 8vw, 4rem);
+    color: var(--ink);
+    letter-spacing: -0.03em;
+    line-height: 1;
+    display: inline-block;
+  }
+  .logo span { color: var(--accent); }
+  .tagline {
+    font-size: 1rem;
+    color: var(--ink3);
+    margin-top: 0.5rem;
+    font-weight: 300;
+    letter-spacing: 0.05em;
+  }
+
+  /* CARDS */
+  .card {
+    background: #faf7f2;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 2rem;
+    margin-bottom: 1.5rem;
+  }
+  .card-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 1.1rem;
+    margin-bottom: 1.25rem;
+    color: var(--ink);
+    letter-spacing: -0.01em;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .card-title .icon {
+    font-size: 1.2rem;
+  }
+
+  /* BUTTONS */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.95rem;
+    font-weight: 500;
+    padding: 0.75rem 1.5rem;
+    border-radius: 100px;
+    border: 1.5px solid var(--ink);
+    background: transparent;
+    color: var(--ink);
+    cursor: pointer;
+    transition: all 0.15s;
+    text-decoration: none;
+  }
+  .btn:hover { background: var(--paper3); transform: translateY(-1px); }
+  .btn:active { transform: translateY(0) scale(0.98); }
+
+  .btn-primary {
+    background: var(--ink);
+    color: var(--paper);
+    border-color: var(--ink);
+  }
+  .btn-primary:hover { background: var(--ink2); }
+
+  .btn-accent {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+  }
+  .btn-accent:hover { background: var(--accent2); border-color: var(--accent2); }
+
+  .btn-green {
+    background: var(--green);
+    color: white;
+    border-color: var(--green);
+    font-size: 1.05rem;
+    padding: 0.9rem 2rem;
+    width: 100%;
+  }
+  .btn-green:hover { background: var(--green2); border-color: var(--green2); }
+  .btn-green:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  .btn-block {
+    width: 100%;
+  }
+
+  /* INPUTS */
+  input[type="text"], textarea {
+    width: 100%;
+    padding: 0.8rem 1rem;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 1rem;
+    background: var(--paper);
+    color: var(--ink);
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  input[type="text"]:focus, textarea:focus {
+    border-color: var(--ink);
+  }
+  textarea {
+    resize: vertical;
+    min-height: 100px;
+    line-height: 1.6;
+  }
+
+  /* DIVIDER */
+  .divider {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin: 1.5rem 0;
+    color: var(--ink3);
+    font-size: 0.85rem;
+  }
+  .divider::before, .divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* VIEWS */
+  .view { display: none; }
+  .view.active { display: block; animation: fadeIn 0.3s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+  /* SALA INFO */
+  .room-code-display {
+    background: var(--ink);
+    color: var(--paper);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    text-align: center;
+    margin-bottom: 1rem;
+  }
+  .room-code-label {
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    color: var(--ink3);
+    text-transform: uppercase;
+    font-family: 'Syne', sans-serif;
+  }
+  .room-code-value {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(2.5rem, 10vw, 3.5rem);
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    line-height: 1.1;
+    color: var(--accent2);
+  }
+
+  /* QR */
+  .qr-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  #qr-code {
+    background: white;
+    padding: 12px;
+    border-radius: var(--radius);
+    border: 1.5px solid var(--border);
+    display: inline-block;
+  }
+  #qr-code canvas { display: block; }
+
+  /* PLAYERS LIST */
+  .players-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+  }
+  .player-chip {
+    background: var(--paper2);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    padding: 0.5rem 1rem;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .player-chip .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--green2);
+    flex-shrink: 0;
+  }
+  .player-chip.host .dot { background: var(--accent); }
+
+  .player-count-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: var(--paper2);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    padding: 0.3rem 0.8rem;
+    font-size: 0.85rem;
+    color: var(--ink2);
+    margin-bottom: 1rem;
+  }
+
+  /* STATUS MSG */
+  .status-msg {
+    text-align: center;
+    padding: 0.75rem;
+    border-radius: var(--radius);
+    font-size: 0.9rem;
+    margin-top: 1rem;
+  }
+  .status-msg.info { background: #e8f4fd; color: #1a5f7a; border: 1px solid #b3d9f0; }
+  .status-msg.success { background: #e8f5ee; color: #1a6e3c; border: 1px solid #a8dbbe; }
+  .status-msg.error { background: #fde8e8; color: #7a1a1a; border: 1px solid #f0b3b3; }
+  .status-msg.warning { background: #fff8e1; color: #7a5c0a; border: 1px solid #ffe082; }
+
+  /* PROMPT GAME */
+  .prompt-target {
+    background: var(--paper2);
+    border: 1.5px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 1rem 1.25rem;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  .prompt-target .arrow {
+    font-size: 1.5rem;
+    flex-shrink: 0;
+  }
+  .prompt-target .target-name {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 1.2rem;
+    color: var(--accent);
+  }
+
+  /* RESULTS */
+  .result-card {
+    background: #faf7f2;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    margin-bottom: 1rem;
+  }
+  .result-header {
+    background: var(--ink);
+    color: var(--paper);
+    padding: 0.75rem 1.25rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.85rem;
+  }
+  .result-header strong {
+    font-family: 'Syne', sans-serif;
+    font-size: 0.9rem;
+  }
+  .result-prompt {
+    padding: 1.25rem;
+    font-size: 1rem;
+    line-height: 1.6;
+    color: var(--ink);
+    font-style: italic;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .result-answer {
+    padding: 1.25rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.95rem;
+    line-height: 1.6;
+    color: var(--ink2);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  /* WAITING SPINNER */
+  .spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--border);
+    border-top-color: var(--ink);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .waiting-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--paper3);
+    font-size: 0.9rem;
+    color: var(--ink2);
+  }
+  .waiting-row:last-child { border-bottom: none; }
+  .waiting-row .check {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    flex-shrink: 0;
+  }
+  .waiting-row .check.done { background: var(--green); color: white; }
+  .waiting-row .check.pending { background: var(--paper3); color: var(--ink3); }
+
+  /* PHASE INDICATOR */
+  .phase-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-bottom: 2rem;
+  }
+  .phase-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--border);
+  }
+  .phase-dot.active { background: var(--accent); width: 24px; border-radius: 4px; }
+  .phase-dot.done { background: var(--green2); }
+
+  /* COPY LINK */
+  .link-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+  }
+  .link-row input {
+    flex: 1;
+    font-size: 0.85rem;
+    padding: 0.6rem 0.8rem;
+    background: var(--paper2);
+  }
+  .btn-copy {
+    padding: 0.6rem 1rem;
+    font-size: 0.85rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  small {
+    color: var(--ink3);
+    font-size: 0.8rem;
+    line-height: 1.4;
+    display: block;
+    margin-top: 0.4rem;
+  }
+
+  h3 {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 1.4rem;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.5rem;
+  }
+  p.muted {
+    color: var(--ink3);
+    font-size: 0.9rem;
+    margin-bottom: 1.25rem;
+    line-height: 1.5;
+  }
+
+  .flex-row {
+    display: flex;
+    gap: 0.75rem;
+  }
+  .flex-row .btn { flex: 1; }
+
+  /* Toast */
+  #toast {
+    position: fixed;
+    bottom: 2rem;
+    left: 50%;
+    transform: translateX(-50%) translateY(10px);
+    background: var(--ink);
+    color: var(--paper);
+    padding: 0.75rem 1.5rem;
+    border-radius: 100px;
+    font-size: 0.9rem;
+    opacity: 0;
+    transition: all 0.3s;
+    pointer-events: none;
+    z-index: 100;
+    white-space: nowrap;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* Config warning */
+  #config-warning {
+    background: #fff3cd;
+    border: 1.5px solid #ffc107;
+    border-radius: var(--radius);
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.5rem;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    color: #5c4500;
+    display: none;
+  }
+  #config-warning a { color: var(--accent); }
+
+  .config-form { display: none; }
+  .config-form.show { display: block; }
+  .config-form label {
+    font-size: 0.85rem;
+    color: var(--ink2);
+    display: block;
+    margin-bottom: 0.3rem;
+    font-weight: 500;
+  }
+  .config-form .form-group { margin-bottom: 1rem; }
+
+  @media (max-width: 480px) {
+    .container { padding: 1.5rem 1rem 3rem; }
+    .card { padding: 1.5rem; }
+    .room-code-value { font-size: 2.5rem; }
+  }
+</style>
+</head>
+<body>
+
+<div id="toast"></div>
+
+<div class="container">
+
+  <header class="header">
+    <div class="logo">Prompt<span>Play</span></div>
+    <p class="tagline">El juego de prompts para grupos</p>
+  </header>
+
+  <!-- CONFIG WARNING -->
+  <div id="config-warning">
+    ⚠️ <strong>Firebase no está configurado.</strong> Para que el juego multijugador funcione necesitas conectar tu propia base de datos Firebase Realtime Database. 
+    <a href="#" onclick="toggleConfig()">Configurar ahora →</a>
+    <div class="config-form" id="config-form" style="margin-top:1rem;">
+      <div class="form-group">
+        <label>API Key</label>
+        <input type="text" id="cfg-apikey" placeholder="AIza...">
+      </div>
+      <div class="form-group">
+        <label>Database URL</label>
+        <input type="text" id="cfg-dburl" placeholder="https://tu-proyecto.firebaseio.com">
+      </div>
+      <div class="form-group">
+        <label>Project ID</label>
+        <input type="text" id="cfg-projectid" placeholder="tu-proyecto-id">
+      </div>
+      <button class="btn btn-primary" onclick="saveConfig()">Guardar y recargar</button>
+      <small style="margin-top:0.5rem;">Crea un proyecto en <a href="https://console.firebase.google.com" target="_blank" style="color:var(--accent)">console.firebase.google.com</a>. Activa Realtime Database y pon las reglas en modo test.</small>
+    </div>
+  </div>
+
+  <!-- ===== VIEW: HOME ===== -->
+  <div id="view-home" class="view active">
+
+    <div class="card">
+      <div class="card-title"><span class="icon">✦</span> Crear sala</div>
+      <input type="text" id="home-name" placeholder="Tu nombre" maxlength="20" style="margin-bottom:0.75rem;">
+      <button class="btn btn-primary btn-block" onclick="createRoom()">Crear nueva sala</button>
+    </div>
+
+    <div class="divider">o únete a una sala</div>
+
+    <div class="card">
+      <div class="card-title"><span class="icon">↗</span> Unirse a sala</div>
+      <input type="text" id="join-name" placeholder="Tu nombre" maxlength="20" style="margin-bottom:0.75rem;">
+      <input type="text" id="join-code" placeholder="Código de sala (ej: ABC123)" maxlength="6" style="margin-bottom:0.75rem; text-transform: uppercase; letter-spacing: 0.1em; font-family: 'Syne', sans-serif; font-weight: 700;">
+      <button class="btn btn-accent btn-block" onclick="joinRoom()">Entrar a la sala</button>
+    </div>
+
+  </div>
+
+  <!-- ===== VIEW: LOBBY ===== -->
+  <div id="view-lobby" class="view">
+
+    <div class="phase-bar">
+      <div class="phase-dot active" id="ph1"></div>
+      <div class="phase-dot" id="ph2"></div>
+      <div class="phase-dot" id="ph3"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Sala creada</div>
+      <div class="room-code-display">
+        <div class="room-code-label">Código de sala</div>
+        <div class="room-code-value" id="lobby-code">------</div>
+      </div>
+      <div class="link-row" style="margin-bottom:0.75rem;">
+        <input type="text" id="lobby-link" readonly>
+        <button class="btn btn-copy" onclick="copyLink()">Copiar</button>
+      </div>
+      <div class="qr-wrapper">
+        <div id="qr-code"></div>
+        <small style="text-align:center;">Escanea para unirte directamente</small>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        Jugadores 
+        <span class="player-count-badge">
+          <span class="dot" style="width:6px;height:6px;border-radius:50%;background:var(--green2);display:inline-block;"></span>
+          <span id="lobby-player-count">1</span> en sala
+        </span>
+      </div>
+      <div class="players-grid" id="lobby-players"></div>
+    </div>
+
+    <div id="lobby-status" class="status-msg info">
+      Esperando a más jugadores... (mínimo 2 para empezar)
+    </div>
+
+    <div id="lobby-host-controls" style="display:none; margin-top:1rem;">
+      <button class="btn btn-green" id="start-btn" onclick="startGame()" disabled>
+        Empezar partida
+      </button>
+    </div>
+
+  </div>
+
+  <!-- ===== VIEW: WRITE PROMPT ===== -->
+  <div id="view-write" class="view">
+
+    <div class="phase-bar">
+      <div class="phase-dot done" id="ph1b"></div>
+      <div class="phase-dot active" id="ph2b"></div>
+      <div class="phase-dot" id="ph3b"></div>
+    </div>
+
+    <h3>Escribe tu prompt</h3>
+    <p class="muted" id="write-subtitle">Tu prompt irá a una persona al azar</p>
+
+    <div class="prompt-target">
+      <span class="arrow">→</span>
+      <div>
+        <div style="font-size:0.75rem;color:var(--ink3);letter-spacing:0.05em;text-transform:uppercase;margin-bottom:2px;">Tu prompt irá a</div>
+        <div class="target-name" id="prompt-target-name">...</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <textarea id="prompt-text" placeholder="Escribe aquí tu prompt... (ej: 'Descríbete como si fueras un personaje de videojuego')" maxlength="500"></textarea>
+      <small style="text-align:right; margin-top:0.5rem;" id="char-count">0 / 500</small>
+    </div>
+
+    <button class="btn btn-green" onclick="submitPrompt()">Enviar prompt ✓</button>
+
+    <div id="write-status" class="status-msg info" style="margin-top:1rem; display:none;"></div>
+  </div>
+
+  <!-- ===== VIEW: WAITING FOR PROMPTS ===== -->
+  <div id="view-waiting" class="view">
+
+    <div class="phase-bar">
+      <div class="phase-dot done"></div>
+      <div class="phase-dot active"></div>
+      <div class="phase-dot"></div>
+    </div>
+
+    <h3>Prompt enviado ✓</h3>
+    <p class="muted">Esperando a que todos terminen de escribir...</p>
+
+    <div class="card">
+      <div class="card-title">Estado de jugadores</div>
+      <div id="waiting-players"></div>
+    </div>
+
+  </div>
+
+  <!-- ===== VIEW: ANSWER ===== -->
+  <div id="view-answer" class="view">
+
+    <div class="phase-bar">
+      <div class="phase-dot done"></div>
+      <div class="phase-dot done"></div>
+      <div class="phase-dot active"></div>
+    </div>
+
+    <h3>Responde al prompt</h3>
+    <p class="muted">Alguien tiene ganas de saber algo de ti</p>
+
+    <div class="card" style="border-left: 4px solid var(--accent);">
+      <div style="font-size:0.8rem;color:var(--ink3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.5rem;">El prompt que recibiste</div>
+      <p style="font-size:1.05rem;line-height:1.6;font-style:italic;color:var(--ink);" id="received-prompt">&ldquo;...&rdquo;</p>
+    </div>
+
+    <div class="card">
+      <textarea id="answer-text" placeholder="Tu respuesta..." maxlength="800"></textarea>
+      <small style="text-align:right; margin-top:0.5rem;" id="char-count-answer">0 / 800</small>
+    </div>
+
+    <button class="btn btn-green" onclick="submitAnswer()">Enviar respuesta ✓</button>
+  </div>
+
+  <!-- ===== VIEW: WAITING FOR ANSWERS ===== -->
+  <div id="view-waiting-answers" class="view">
+    <div class="phase-bar">
+      <div class="phase-dot done"></div>
+      <div class="phase-dot done"></div>
+      <div class="phase-dot active"></div>
+    </div>
+    <h3>Respuesta enviada ✓</h3>
+    <p class="muted">Esperando a que todos respondan...</p>
+    <div class="card">
+      <div class="card-title">Estado de respuestas</div>
+      <div id="waiting-answers-players"></div>
+    </div>
+  </div>
+
+  <!-- ===== VIEW: RESULTS ===== -->
+  <div id="view-results" class="view">
+
+    <div class="phase-bar">
+      <div class="phase-dot done"></div>
+      <div class="phase-dot done"></div>
+      <div class="phase-dot done"></div>
+    </div>
+
+    <h3>Resultados 🎉</h3>
+    <p class="muted">¡Así respondió todo el mundo!</p>
+
+    <div id="results-container"></div>
+
+    <div class="flex-row" style="margin-top:1.5rem;">
+      <button class="btn btn-primary" onclick="playAgain()">Jugar otra ronda</button>
+      <button class="btn" onclick="goHome()">Salir</button>
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+// ─── FIREBASE CONFIG ──────────────────────────────────────────────────────────
+// Se puede configurar guardando en localStorage
+const DEFAULT_CONFIG = {
+  apiKey: localStorage.getItem('pp_apiKey') || '',
+  authDomain: '',
+  databaseURL: localStorage.getItem('pp_dbUrl') || '',
+  projectId: localStorage.getItem('pp_projectId') || '',
+};
+
+let db = null;
+let configOk = false;
+
+function initFirebase(config) {
+  try {
+    if (!firebase.apps.length) {
+      firebase.initializeApp(config);
+    }
+    db = firebase.database();
+    configOk = true;
+    document.getElementById('config-warning').style.display = 'none';
+    return true;
+  } catch(e) {
+    console.error('Firebase init error', e);
+    return false;
+  }
+}
+
+function toggleConfig() {
+  const f = document.getElementById('config-form');
+  f.classList.toggle('show');
+}
+
+function saveConfig() {
+  const apiKey = document.getElementById('cfg-apikey').value.trim();
+  const dbUrl = document.getElementById('cfg-dburl').value.trim();
+  const projectId = document.getElementById('cfg-projectid').value.trim();
+  if (!apiKey || !dbUrl || !projectId) { showToast('Completa todos los campos'); return; }
+  localStorage.setItem('pp_apiKey', apiKey);
+  localStorage.setItem('pp_dbUrl', dbUrl);
+  localStorage.setItem('pp_projectId', projectId);
+  location.reload();
+}
+
+// ─── STATE ────────────────────────────────────────────────────────────────────
+let state = {
+  playerId: null,
+  playerName: null,
+  roomCode: null,
+  isHost: false,
+  assignedTarget: null, // player id que recibirá mi prompt
+  receivedFrom: null,   // player id que me envió prompt
+  receivedPromptText: null,
+};
+
+let unsubscribers = [];
+
+// ─── UTILS ────────────────────────────────────────────────────────────────────
+function uid(len = 8) {
+  return Math.random().toString(36).substring(2, 2 + len).toUpperCase();
+}
+
+function roomCode6() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let s = '';
+  for (let i = 0; i < 6; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  return s;
+}
+
+function showView(id) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-' + id).classList.add('active');
+}
+
+function showToast(msg, dur = 2500) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), dur);
+}
+
+function copyLink() {
+  const link = document.getElementById('lobby-link').value;
+  navigator.clipboard.writeText(link).then(() => showToast('¡Link copiado!'));
+}
+
+// ─── FIREBASE HELPERS ─────────────────────────────────────────────────────────
+function roomRef(path = '') {
+  return db.ref('rooms/' + state.roomCode + (path ? '/' + path : ''));
+}
+
+function onRoom(path, cb) {
+  const ref = roomRef(path);
+  ref.on('value', cb);
+  unsubscribers.push(() => ref.off('value', cb));
+}
+
+function offAll() {
+  unsubscribers.forEach(fn => fn());
+  unsubscribers = [];
+}
+
+// ─── SHUFFLE (Fisher-Yates derangement) ──────────────────────────────────────
+function derangement(arr) {
+  // Asigna destinos sin que nadie se asigne a sí mismo
+  if (arr.length < 2) return arr;
+  let result;
+  do {
+    result = [...arr].sort(() => Math.random() - 0.5);
+  } while (result.some((v, i) => v === arr[i]));
+  return result;
+}
+
+// ─── CREATE ROOM ──────────────────────────────────────────────────────────────
+async function createRoom() {
+  if (!configOk) { showToast('Configura Firebase primero'); return; }
+  const name = document.getElementById('home-name').value.trim();
+  if (!name) { showToast('Escribe tu nombre'); return; }
+
+  state.playerId = uid();
+  state.playerName = name;
+  state.roomCode = roomCode6();
+  state.isHost = true;
+
+  await roomRef().set({
+    code: state.roomCode,
+    host: state.playerId,
+    phase: 'lobby',
+    createdAt: Date.now(),
+    players: {
+      [state.playerId]: { name, joined: Date.now(), isHost: true }
+    }
+  });
+
+  enterLobby();
+}
+
+// ─── JOIN ROOM ────────────────────────────────────────────────────────────────
+async function joinRoom() {
+  if (!configOk) { showToast('Configura Firebase primero'); return; }
+  const name = document.getElementById('join-name').value.trim();
+  const code = document.getElementById('join-code').value.trim().toUpperCase();
+  if (!name) { showToast('Escribe tu nombre'); return; }
+  if (!code || code.length !== 6) { showToast('Introduce un código de 6 caracteres'); return; }
+
+  const snap = await db.ref('rooms/' + code).get();
+  if (!snap.exists()) { showToast('Sala no encontrada'); return; }
+  const room = snap.val();
+  if (room.phase !== 'lobby') { showToast('La partida ya empezó'); return; }
+
+  state.playerId = uid();
+  state.playerName = name;
+  state.roomCode = code;
+  state.isHost = false;
+
+  await db.ref('rooms/' + code + '/players/' + state.playerId).set({
+    name, joined: Date.now(), isHost: false
+  });
+
+  enterLobby();
+}
+
+// ─── JOIN VIA URL ─────────────────────────────────────────────────────────────
+function checkURLJoin() {
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('sala');
+  if (code) {
+    document.getElementById('join-code').value = code.toUpperCase();
+    showToast('Código cargado: ' + code.toUpperCase());
+  }
+}
+
+// ─── LOBBY ────────────────────────────────────────────────────────────────────
+function enterLobby() {
+  showView('lobby');
+  const code = state.roomCode;
+
+  // Mostrar código
+  document.getElementById('lobby-code').textContent = code;
+
+  // Generar link y QR
+  const url = location.origin + location.pathname + '?sala=' + code;
+  document.getElementById('lobby-link').value = url;
+
+  const qrEl = document.getElementById('qr-code');
+  qrEl.innerHTML = '';
+  new QRCode(qrEl, {
+    text: url,
+    width: 160,
+    height: 160,
+    colorDark: '#0e0e0e',
+    colorLight: '#ffffff',
+    correctLevel: QRCode.CorrectLevel.M,
+  });
+
+  // Mostrar controles de host
+  if (state.isHost) {
+    document.getElementById('lobby-host-controls').style.display = 'block';
+  }
+
+  // Escuchar jugadores
+  onRoom('players', snap => {
+    const players = snap.val() || {};
+    renderLobbyPlayers(players);
+  });
+
+  // Escuchar fase (por si el host inicia)
+  onRoom('phase', snap => {
+    const phase = snap.val();
+    if (phase === 'writing') {
+      offAll();
+      enterWritePhase();
+    }
+    if (phase === 'answering') {
+      offAll();
+      enterAnswerPhase();
+    }
+    if (phase === 'results') {
+      offAll();
+      enterResults();
+    }
+  });
+
+  // On disconnect: eliminar jugador
+  db.ref('rooms/' + state.roomCode + '/players/' + state.playerId)
+    .onDisconnect().remove();
+}
+
+function renderLobbyPlayers(players) {
+  const ids = Object.keys(players);
+  const count = ids.length;
+  document.getElementById('lobby-player-count').textContent = count;
+
+  const grid = document.getElementById('lobby-players');
+  grid.innerHTML = ids.map(id => {
+    const p = players[id];
+    const isMe = id === state.playerId;
+    return `<div class="player-chip ${p.isHost ? 'host' : ''}">
+      <span class="dot"></span>
+      ${p.name}${isMe ? ' (tú)' : ''}${p.isHost ? ' ★' : ''}
+    </div>`;
+  }).join('');
+
+  const statusEl = document.getElementById('lobby-status');
+  if (count < 2) {
+    statusEl.className = 'status-msg info';
+    statusEl.textContent = 'Esperando a más jugadores... (mínimo 2)';
+  } else {
+    statusEl.className = 'status-msg success';
+    statusEl.textContent = `¡${count} jugadores listos! El host puede iniciar la partida.`;
+  }
+
+  if (state.isHost) {
+    document.getElementById('start-btn').disabled = count < 2;
+  }
+}
+
+// ─── START GAME ───────────────────────────────────────────────────────────────
+async function startGame() {
+  const snap = await roomRef('players').get();
+  const players = snap.val() || {};
+  const ids = Object.keys(players);
+
+  if (ids.length < 2) { showToast('Necesitas al menos 2 jugadores'); return; }
+
+  // Crear asignaciones: derangement de ids
+  const targets = derangement(ids);
+  const assignments = {};
+  ids.forEach((id, i) => {
+    assignments[id] = targets[i]; // id → envía prompt a targets[i]
+  });
+
+  await roomRef().update({
+    phase: 'writing',
+    assignments,
+  });
+}
+
+// ─── WRITE PHASE ─────────────────────────────────────────────────────────────
+async function enterWritePhase() {
+  // Obtener mi asignación
+  const snap = await roomRef('assignments/' + state.playerId).get();
+  const targetId = snap.val();
+  state.assignedTarget = targetId;
+
+  const tSnap = await roomRef('players/' + targetId + '/name').get();
+  const targetName = tSnap.val();
+
+  document.getElementById('prompt-target-name').textContent = targetName;
+  showView('write');
+
+  // Character counter
+  const ta = document.getElementById('prompt-text');
+  const cc = document.getElementById('char-count');
+  ta.addEventListener('input', () => { cc.textContent = ta.value.length + ' / 500'; });
+
+  // Escuchar phase changes
+  onRoom('phase', snap => {
+    const phase = snap.val();
+    if (phase === 'answering') { offAll(); enterAnswerPhase(); }
+    if (phase === 'results') { offAll(); enterResults(); }
+  });
+}
+
+async function submitPrompt() {
+  const text = document.getElementById('prompt-text').value.trim();
+  if (!text) { showToast('Escribe un prompt primero'); return; }
+
+  await roomRef('prompts/' + state.playerId).set({
+    from: state.playerId,
+    to: state.assignedTarget,
+    text,
+  });
+
+  showView('waiting');
+  renderWaitingPlayers();
+
+  onRoom('prompts', async snap => {
+    const prompts = snap.val() || {};
+    const playersSnap = await roomRef('players').get();
+    const players = playersSnap.val() || {};
+    renderWaiting(players, prompts, 'waiting-players');
+
+    const total = Object.keys(players).length;
+    const submitted = Object.keys(prompts).length;
+    if (submitted >= total && state.isHost) {
+      // Todos enviaron, pasar a responder
+      await roomRef('phase').set('answering');
+    }
+  });
+}
+
+function renderWaiting(players, data, containerId) {
+  const el = document.getElementById(containerId);
+  el.innerHTML = Object.entries(players).map(([id, p]) => {
+    const done = !!data[id];
+    const isMe = id === state.playerId;
+    return `<div class="waiting-row">
+      <div class="check ${done ? 'done' : 'pending'}">${done ? '✓' : '…'}</div>
+      ${p.name}${isMe ? ' (tú)' : ''} ${done ? '' : '<span style="color:var(--ink3);font-size:0.85rem;margin-left:auto">escribiendo...</span>'}
+    </div>`;
+  }).join('');
+}
+
+async function renderWaitingPlayers() {
+  onRoom('players', snap => {
+    const players = snap.val() || {};
+    onRoom('prompts', snap2 => {
+      renderWaiting(players, snap2.val() || {}, 'waiting-players');
+    });
+  });
+}
+
+// ─── ANSWER PHASE ────────────────────────────────────────────────────────────
+async function enterAnswerPhase() {
+  // Encontrar el prompt que me llegó a mí
+  const snap = await roomRef('prompts').get();
+  const prompts = snap.val() || {};
+
+  let myPrompt = null;
+  for (const [fromId, p] of Object.entries(prompts)) {
+    if (p.to === state.playerId) {
+      myPrompt = p;
+      state.receivedFrom = fromId;
+      break;
+    }
+  }
+
+  if (!myPrompt) {
+    showToast('Error: no se encontró tu prompt');
+    return;
+  }
+
+  state.receivedPromptText = myPrompt.text;
+  document.getElementById('received-prompt').textContent = `"${myPrompt.text}"`;
+
+  showView('answer');
+
+  const ta = document.getElementById('answer-text');
+  const cc = document.getElementById('char-count-answer');
+  ta.addEventListener('input', () => { cc.textContent = ta.value.length + ' / 800'; });
+
+  onRoom('phase', snap => {
+    const phase = snap.val();
+    if (phase === 'results') { offAll(); enterResults(); }
+  });
+}
+
+async function submitAnswer() {
+  const text = document.getElementById('answer-text').value.trim();
+  if (!text) { showToast('Escribe tu respuesta primero'); return; }
+
+  await roomRef('answers/' + state.playerId).set({
+    playerId: state.playerId,
+    promptFrom: state.receivedFrom,
+    text,
+  });
+
+  showView('waiting-answers');
+
+  onRoom('answers', async snap => {
+    const answers = snap.val() || {};
+    const pSnap = await roomRef('players').get();
+    const players = pSnap.val() || {};
+    renderWaiting(players, answers, 'waiting-answers-players');
+
+    const total = Object.keys(players).length;
+    const answered = Object.keys(answers).length;
+    if (answered >= total && state.isHost) {
+      await roomRef('phase').set('results');
+    }
+  });
+}
+
+// ─── RESULTS ─────────────────────────────────────────────────────────────────
+async function enterResults() {
+  showView('results');
+
+  const [pSnap, prSnap, aSnap] = await Promise.all([
+    roomRef('players').get(),
+    roomRef('prompts').get(),
+    roomRef('answers').get(),
+  ]);
+
+  const players = pSnap.val() || {};
+  const prompts = prSnap.val() || {};
+  const answers = aSnap.val() || {};
+
+  const container = document.getElementById('results-container');
+  container.innerHTML = '';
+
+  Object.entries(prompts).forEach(([fromId, prompt]) => {
+    const fromPlayer = players[fromId];
+    const toPlayer = players[prompt.to];
+    const answer = answers[prompt.to];
+
+    const card = document.createElement('div');
+    card.className = 'result-card';
+    card.innerHTML = `
+      <div class="result-header">
+        <div><strong>${fromPlayer?.name || '?'}</strong> → <strong>${toPlayer?.name || '?'}</strong></div>
+        <div style="color:#aaa;font-size:0.8rem;">prompt</div>
+      </div>
+      <div class="result-prompt">${escHtml(prompt.text)}</div>
+      ${answer ? `
+        <div class="result-answer">
+          <strong style="font-size:0.8rem;color:var(--ink3);letter-spacing:0.05em;text-transform:uppercase;">Respuesta de ${toPlayer?.name || '?'}</strong><br>
+          ${escHtml(answer.text)}
+        </div>
+      ` : '<div class="result-answer" style="color:var(--ink3);font-style:italic;">Sin respuesta</div>'}
+    `;
+    container.appendChild(card);
+  });
+}
+
+function escHtml(str) {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+}
+
+// ─── PLAY AGAIN ───────────────────────────────────────────────────────────────
+async function playAgain() {
+  if (state.isHost) {
+    await roomRef().update({
+      phase: 'lobby',
+      assignments: null,
+      prompts: null,
+      answers: null,
+    });
+  }
+  state.assignedTarget = null;
+  state.receivedFrom = null;
+  state.receivedPromptText = null;
+  offAll();
+  enterLobby();
+}
+
+function goHome() {
+  offAll();
+  state = { playerId: null, playerName: null, roomCode: null, isHost: false, assignedTarget: null, receivedFrom: null, receivedPromptText: null };
+  showView('home');
+}
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  const apiKey = localStorage.getItem('pp_apiKey');
+  const dbUrl = localStorage.getItem('pp_dbUrl');
+  const projectId = localStorage.getItem('pp_projectId');
+
+  if (apiKey && dbUrl && projectId) {
+    const ok = initFirebase({ apiKey, databaseURL: dbUrl, projectId, authDomain: projectId + '.firebaseapp.com' });
+    if (!ok) showWarning();
+  } else {
+    showWarning();
+  }
+
+  checkURLJoin();
+});
+
+function showWarning() {
+  document.getElementById('config-warning').style.display = 'block';
+  document.getElementById('cfg-apikey').value = localStorage.getItem('pp_apiKey') || '';
+  document.getElementById('cfg-dburl').value = localStorage.getItem('pp_dbUrl') || '';
+  document.getElementById('cfg-projectid').value = localStorage.getItem('pp_projectId') || '';
+}
+</script>
+</body>
+</html>
